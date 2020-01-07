@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
 // ReSharper disable AccessToDisposedClosure
@@ -16,8 +15,6 @@ namespace Gzipper
         private readonly CWorker[] _workers;
 
         private readonly Object _readLockObject;
-        private readonly Object _writeLockObject;
-        private readonly ConcurrentQueue<CWorker> _workersQueue;
         private Int64 _writeOffset;
         private Int64 _readOffset;
 
@@ -27,9 +24,7 @@ namespace Gzipper
             _destinationPath = destinationPath;
             _workers = new CWorker[Environment.ProcessorCount];
             //_workers = new CWorker[1];
-            _workersQueue = new ConcurrentQueue<CWorker>();
             _readLockObject = new Object();
-            _writeLockObject = new Object();
             for (var i = 0; i < _workers.Length; i++)
                 _workers[i] = new CWorker();
         }
@@ -41,22 +36,22 @@ namespace Gzipper
 
             ICompressionStrategy compressionStrategy = GetCompressionStrategy();
 
-            using (FileStream sourceStream = File.OpenRead(_sourcePath))
+            foreach (CWorker worker in _workers)
             {
-                foreach (CWorker worker in _workers)
-                {
-                    var destinationStream = new FileStream(_destinationPath, FileMode.Append, FileAccess.Write,
-                        FileShare.Write);
+                var sourceStream = new FileStream(_sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-                    worker.StartRoutine(
-                        (chunk, stream) => CompressAction(chunk, stream, worker, compressionStrategy),
-                        () => GetRawChunk(sourceStream, worker),
-                        destinationStream);
-                }
+                var destinationStream = new FileStream(_destinationPath, FileMode.Append, FileAccess.Write,
+                    FileShare.Write);
 
-                foreach (CWorker worker in _workers)
-                    worker.WaitWhenCompleted();
+                worker.StartRoutine(
+                    (chunk, stream) => CompressAction(chunk, stream, worker, compressionStrategy),
+                    (stream) => GetRawChunk(stream, worker),
+                    destinationStream,
+                    sourceStream);
             }
+
+            foreach (CWorker worker in _workers)
+                worker.WaitWhenCompleted();
         }
 
         public void Decompress()
@@ -66,22 +61,22 @@ namespace Gzipper
 
             ICompressionStrategy compressionStrategy = GetCompressionStrategy();
 
-            using (FileStream sourceStream = File.OpenRead(_sourcePath))
+            foreach (CWorker worker in _workers)
             {
-                foreach (CWorker worker in _workers)
-                {
-                    var destinationStream = new FileStream(_destinationPath, FileMode.Append, FileAccess.Write,
-                        FileShare.Write);
+                var sourceStream = new FileStream(_sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-                    worker.StartRoutine(
-                        (chunk, stream) => DecompressAction(chunk, stream, worker, compressionStrategy),
-                        () => GetCompressedChunk(sourceStream, worker),
-                        destinationStream);
-                }
+                var destinationStream = new FileStream(_destinationPath, FileMode.Append, FileAccess.Write,
+                    FileShare.Write);
 
-                foreach (CWorker worker in _workers)
-                    worker.WaitWhenCompleted(); 
+                worker.StartRoutine(
+                    (chunk, stream) => DecompressAction(chunk, stream, worker, compressionStrategy),
+                    (stream) => GetCompressedChunk(stream, worker),
+                    destinationStream,
+                    sourceStream);
             }
+
+            foreach (CWorker worker in _workers)
+                worker.WaitWhenCompleted();
         }
 
         private ICompressionStrategy GetCompressionStrategy()
@@ -107,34 +102,13 @@ namespace Gzipper
         {
             Byte[] rawData = compressionStrategy.Decompress(sourceChunk.Data);
 
-            Int64 offset = GetWriteOffset(worker, rawData.Length);
-
-            destinationStream.Position = offset;
+            destinationStream.Position = sourceChunk.Offset;
             destinationStream.Write(rawData, 0, rawData.Length);
         }
 
         private Int64 GetWriteOffset(CWorker worker, Int32 dataLength)
         {
-            Int64 offset;
-
-            lock (_writeLockObject)
-            {
-                while (true)
-                {
-                    _workersQueue.TryPeek(out CWorker nextWorker);
-                    if (nextWorker == worker)
-                        break;
-
-                    Monitor.Wait(_writeLockObject);
-                }
-
-                offset = _writeOffset;
-                _writeOffset += dataLength;
-
-                _workersQueue.TryDequeue(out CWorker _);
-
-                Monitor.PulseAll(_writeLockObject);
-            }
+            Int64 offset = Interlocked.Add(ref _writeOffset, dataLength) - dataLength;
 
             return offset;
         }
@@ -142,29 +116,28 @@ namespace Gzipper
         private CChunk GetCompressedChunk(Stream sourceStream, CWorker consumer)
         {
             Int32 chunkSize;
-            
+
             lock (_readLockObject)
             {
-                _workersQueue.Enqueue(consumer);
+                sourceStream.Position = _readOffset;
                 if (!sourceStream.TryReadInt32(out chunkSize))
                     return null;
 
-                return sourceStream.ReadChunk(chunkSize);
+                // 4 byte for size value, 8 byte for offset value.
+                _readOffset += chunkSize + sizeof(Int32) + sizeof(Int64);
             }
+
+            return sourceStream.ReadChunk(chunkSize);
         }
 
         private CChunk GetRawChunk(Stream sourceStream, CWorker consumer)
         {
             var data = new Byte[SourceChunkSize];
-            Int32 readCount;
 
             Int64 originalOffset = Interlocked.Add(ref _readOffset, SourceChunkSize) - SourceChunkSize;
 
-            lock (_readLockObject)
-            {
-                _workersQueue.Enqueue(consumer);
-                readCount = sourceStream.Read(data, 0, SourceChunkSize);
-            }
+            sourceStream.Position = originalOffset;
+            Int32 readCount = sourceStream.Read(data, 0, SourceChunkSize);
 
             if (readCount < SourceChunkSize)
             {

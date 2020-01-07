@@ -10,9 +10,10 @@ namespace Gzipper
         private readonly Thread _thread;
         private readonly ManualResetEventSlim _workCompletedResetEvent;
 
-        private Func<CChunk> _chunkSource;
+        private Func<Stream, CChunk> _chunkSource;
         private Action<CChunk, Stream> _workAction;
         private Stream _destinationStream;
+        private Stream _sourceStream;
 
         public CWorker()
         {
@@ -25,11 +26,13 @@ namespace Gzipper
             _workCompletedResetEvent.Wait();
         }
 
-        public void StartRoutine(Action<CChunk, Stream> workAction, Func<CChunk> chunkSource, Stream destinationStream)
+        public void StartRoutine(Action<CChunk, Stream> workAction, Func<Stream, CChunk> chunkSource,
+            Stream destinationStream, Stream sourceStream)
         {
             _workAction = workAction;
-            _destinationStream = destinationStream;
             _chunkSource = chunkSource;
+            _destinationStream = destinationStream;
+            _sourceStream = sourceStream;
             _thread.Start();
         }
 
@@ -39,13 +42,14 @@ namespace Gzipper
             {
                 while (true)
                 {
-                    CChunk chunk = _chunkSource();
+                    CChunk chunk = _chunkSource(_sourceStream);
                     if (chunk == null)
                         break;
 
                     _workAction(chunk, _destinationStream);
                 }
 
+                _sourceStream.Dispose();
                 _destinationStream.Dispose();
                 _workCompletedResetEvent.Set();
             }
