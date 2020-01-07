@@ -12,19 +12,30 @@ namespace Gzipper
             {
                 using (var gzipStream = new GZipStream(memoryStream, CompressionMode.Compress, true))
                     gzipStream.Write(source, 0, source.Length);
-                
+
                 return memoryStream.ToArray();
             }
         }
 
         public Byte[] Decompress(Byte[] source)
         {
-            using (var memoryStream = new MemoryStream())
-            using (var gzipStream = new GZipStream(memoryStream, CompressionMode.Decompress))
+            using (var sourceMemoryStream = new MemoryStream(source))
+            using (var destinationMemoryStream = new MemoryStream())
+            using (var gzipStream = new GZipStream(sourceMemoryStream, CompressionMode.Decompress))
             {
-                gzipStream.CopyTo(memoryStream);
+                const Int32 bufferSize = 4096;
+                var buffer = new Byte[bufferSize];
 
-                return memoryStream.ToArray();
+                while (true)
+                {
+                    Int32 readCount = gzipStream.Read(buffer, 0, bufferSize);
+                    if (readCount == 0)
+                        break;
+
+                    destinationMemoryStream.Write(buffer, 0, readCount);
+                }
+
+                return destinationMemoryStream.ToArray();
             }
         }
     }

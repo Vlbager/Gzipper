@@ -16,7 +16,7 @@ namespace Gzipper
 
         public CWorker()
         {
-            _thread = new Thread(Routine) { IsBackground = true };
+            _thread = new Thread(Routine);
             _workCompletedResetEvent = new ManualResetEventSlim(initialState: false);
         }
 
