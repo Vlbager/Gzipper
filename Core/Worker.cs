@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
 
@@ -15,6 +14,8 @@ namespace Gzipper
         private Stream _destinationStream;
         private Stream _sourceStream;
 
+        private Exception _workerException;
+
         public CWorker()
         {
             _thread = new Thread(Routine);
@@ -24,6 +25,8 @@ namespace Gzipper
         public void WaitWhenCompleted()
         {
             _workCompletedResetEvent.Wait();
+            if (_workerException != null)
+                throw _workerException;
         }
 
         public void StartRoutine(Action<CChunk, Stream> workAction, Func<Stream, CChunk> chunkSource,
@@ -48,14 +51,17 @@ namespace Gzipper
 
                     _workAction(chunk, _destinationStream);
                 }
-
-                _sourceStream.Dispose();
-                _destinationStream.Dispose();
-                _workCompletedResetEvent.Set();
             }
             catch (Exception exception)
             {
-                Console.WriteLine($"Unexpected error occured in thread {_thread.ManagedThreadId}\n{exception}");
+                Console.WriteLine($"Unexpected error occured in thread {_thread.ManagedThreadId}");
+                _workerException = exception;
+            }
+            finally
+            {
+                _sourceStream.Dispose();
+                _destinationStream.Dispose();
+                _workCompletedResetEvent.Set();
             }
         }
     }

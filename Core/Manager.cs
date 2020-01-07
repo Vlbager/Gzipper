@@ -23,7 +23,6 @@ namespace Gzipper
             _sourcePath = sourcePath;
             _destinationPath = destinationPath;
             _workers = new CWorker[Environment.ProcessorCount];
-            //_workers = new CWorker[1];
             _readLockObject = new Object();
             for (var i = 0; i < _workers.Length; i++)
                 _workers[i] = new CWorker();
@@ -44,8 +43,8 @@ namespace Gzipper
                     FileShare.Write);
 
                 worker.StartRoutine(
-                    (chunk, stream) => CompressAction(chunk, stream, worker, compressionStrategy),
-                    (stream) => GetRawChunk(stream, worker),
+                    (chunk, stream) => CompressAction(chunk, stream, compressionStrategy),
+                    GetRawChunk,
                     destinationStream,
                     sourceStream);
             }
@@ -69,8 +68,8 @@ namespace Gzipper
                     FileShare.Write);
 
                 worker.StartRoutine(
-                    (chunk, stream) => DecompressAction(chunk, stream, worker, compressionStrategy),
-                    (stream) => GetCompressedChunk(stream, worker),
+                    (chunk, stream) => DecompressAction(chunk, stream, compressionStrategy),
+                    GetCompressedChunk,
                     destinationStream,
                     sourceStream);
             }
@@ -84,20 +83,20 @@ namespace Gzipper
             return new GzipperStrategy();
         }
 
-        private void CompressAction(CChunk sourceChunk, Stream destinationStream, CWorker worker,
+        private void CompressAction(CChunk sourceChunk, Stream destinationStream,
             ICompressionStrategy compressionStrategy)
         {
             Byte[] compressedData = compressionStrategy.Compress(sourceChunk.Data);
 
             var compressedChunk = new CChunk(compressedData, sourceChunk.Offset);
 
-            Int64 offset = GetWriteOffset(worker, compressedChunk.Size);
+            Int64 offset = GetWriteOffset(compressedChunk.Size);
 
             destinationStream.Position = offset;
             destinationStream.WriteChunk(compressedChunk);
         }
 
-        private void DecompressAction(CChunk sourceChunk, Stream destinationStream, CWorker worker,
+        private void DecompressAction(CChunk sourceChunk, Stream destinationStream,
             ICompressionStrategy compressionStrategy)
         {
             Byte[] rawData = compressionStrategy.Decompress(sourceChunk.Data);
@@ -106,14 +105,14 @@ namespace Gzipper
             destinationStream.Write(rawData, 0, rawData.Length);
         }
 
-        private Int64 GetWriteOffset(CWorker worker, Int32 dataLength)
+        private Int64 GetWriteOffset(Int32 dataLength)
         {
             Int64 offset = Interlocked.Add(ref _writeOffset, dataLength) - dataLength;
 
             return offset;
         }
 
-        private CChunk GetCompressedChunk(Stream sourceStream, CWorker consumer)
+        private CChunk GetCompressedChunk(Stream sourceStream)
         {
             Int32 chunkSize;
 
@@ -130,7 +129,7 @@ namespace Gzipper
             return sourceStream.ReadChunk(chunkSize);
         }
 
-        private CChunk GetRawChunk(Stream sourceStream, CWorker consumer)
+        private CChunk GetRawChunk(Stream sourceStream)
         {
             var data = new Byte[SourceChunkSize];
 

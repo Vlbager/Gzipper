@@ -6,8 +6,9 @@ namespace Gzipper
     internal static class SStreamExtensions
     {
         // Chunk struct:
-        // 4 bytes: size,
-        // n bytes: data
+        // 4 bytes: data size = n,
+        // 8 bytes: original offset,
+        // n bytes: data.
 
 
         /// <exception cref="InvalidDataException">Chunk expected to exist</exception>

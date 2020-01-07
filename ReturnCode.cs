@@ -2,10 +2,7 @@
 {
     internal enum EReturnCode
     {
-        Success,
-        FileNotFound,
-        InvalidData,
-        InvalidArgs,
-        FatalError
+        Ok,
+        Fail
     }
 }
