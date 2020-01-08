@@ -14,7 +14,6 @@ namespace Gzipper
         private readonly CWorker[] _workers;
         private readonly ICompressionStrategy _compressionStrategy;
 
-        private readonly Object _readLockObject;
         private Int64 _writeOffset;
         private Int64 _readOffset;
 
@@ -24,7 +23,6 @@ namespace Gzipper
             _destinationPath = destinationPath;
             _compressionStrategy = compressionStrategy;
             _workers = new CWorker[Environment.ProcessorCount];
-            _readLockObject = new Object();
             for (var i = 0; i < _workers.Length; i++)
                 _workers[i] = new CWorker();
         }
@@ -91,14 +89,20 @@ namespace Gzipper
         {
             Int32 chunkSize;
 
-            lock (_readLockObject)
+            Boolean chunkIsCaptured;
+            do
             {
-                sourceStream.Position = _readOffset;
+                Int64 startPosition = _readOffset;
+                sourceStream.Position = startPosition;
                 if (!sourceStream.TryReadInt32(out chunkSize))
                     return null;
 
-                _readOffset += chunkSize + CChunk.HeaderSize;
-            }
+                Int64 nextOffset = startPosition + chunkSize + CChunk.HeaderSize;
+
+                chunkIsCaptured = Interlocked
+                                      .CompareExchange(ref _readOffset, nextOffset, startPosition) == startPosition;
+
+            } while (!chunkIsCaptured);
 
             return sourceStream.ReadChunk(chunkSize);
         }
