@@ -38,7 +38,8 @@ namespace Gzipper
 
         private static Int32 Compress(CCompressOptions options)
         {
-            var manager = new CManager(options.SourceFileName, options.DestinationFileName);
+            var compressionStrategy = new CGzipperStrategy();
+            var manager = new CManager(options.SourceFileName, options.DestinationFileName, compressionStrategy);
             manager.Compress();
 
             return (Int32)EReturnCode.Ok;
@@ -46,7 +47,8 @@ namespace Gzipper
 
         private static Int32 Decompress(CDecompressOptions options)
         {
-            var manager = new CManager(options.SourceFileName, options.DestinationFileName);
+            var compressionStrategy = new CGzipperStrategy();
+            var manager = new CManager(options.SourceFileName, options.DestinationFileName, compressionStrategy);
             manager.Decompress();
 
             return (Int32) EReturnCode.Ok;

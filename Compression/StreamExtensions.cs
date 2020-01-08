@@ -26,8 +26,8 @@ namespace Gzipper
 
         public static void WriteChunk(this Stream stream, CChunk chunk)
         {
-            stream.WriteInt(chunk.Data.Length);
-            stream.WriteInt(chunk.Offset);
+            stream.Write(BitConverter.GetBytes(chunk.Data.Length));
+            stream.Write(BitConverter.GetBytes(chunk.Offset));
             stream.Write(chunk.Data, 0, chunk.Data.Length);
         }
 
@@ -53,18 +53,6 @@ namespace Gzipper
                 throw new InvalidDataException("Unexpected end of stream");
 
             return BitConverter.ToInt64(bytes);
-        }
-
-        private static void WriteInt(this Stream stream, Int32 value)
-        {
-            Byte[] bytes = BitConverter.GetBytes(value);
-            stream.Write(bytes, 0, sizeof(Int32));
-        }
-
-        private static void WriteInt(this Stream stream, Int64 value)
-        {
-            Byte[] bytes = BitConverter.GetBytes(value);
-            stream.Write(bytes, 0, sizeof(Int64));
         }
     }
 }

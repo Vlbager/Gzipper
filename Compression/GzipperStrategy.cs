@@ -4,7 +4,7 @@ using System.IO.Compression;
 
 namespace Gzipper
 {
-    internal class GzipperStrategy : ICompressionStrategy
+    internal class CGzipperStrategy : ICompressionStrategy
     {
         public Byte[] Compress(Byte[] source)
         {
