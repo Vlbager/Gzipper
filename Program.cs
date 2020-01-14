@@ -38,18 +38,22 @@ namespace Gzipper
 
         private static Int32 Compress(CCompressOptions options)
         {
-            var compressionStrategy = new CGzipperStrategy();
-            var manager = new CManager(options.SourceFileName, options.DestinationFileName, compressionStrategy);
-            manager.Compress();
+            using (var manager = new CManager(options.SourceFileName, options.DestinationFileName))
+            {
+                var workStrategy = new CCompressor(new CGzipperStrategy());
+                manager.Start(workStrategy);
+            }
 
             return (Int32)EReturnCode.Ok;
         }
 
         private static Int32 Decompress(CDecompressOptions options)
         {
-            var compressionStrategy = new CGzipperStrategy();
-            var manager = new CManager(options.SourceFileName, options.DestinationFileName, compressionStrategy);
-            manager.Decompress();
+            using (var manager = new CManager(options.SourceFileName, options.DestinationFileName))
+            {
+                var workStrategy = new CDecompressor(new CGzipperStrategy());
+                manager.Start(workStrategy);
+            }
 
             return (Int32) EReturnCode.Ok;
         }

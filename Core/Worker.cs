@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using System.Threading;
 
 namespace Gzipper
@@ -9,10 +8,8 @@ namespace Gzipper
         private readonly Thread _thread;
         private readonly ManualResetEventSlim _workCompletedResetEvent;
 
-        private Func<Stream, CChunk> _chunkSource;
-        private Action<CChunk, Stream> _workAction;
-        private Stream _destinationStream;
-        private Stream _sourceStream;
+        private Func<CChunk> _chunkSource;
+        private Action<CChunk> _workAction;
 
         private Exception _workerException;
 
@@ -27,15 +24,14 @@ namespace Gzipper
             _workCompletedResetEvent.Wait();
             if (_workerException != null)
                 throw _workerException;
+
+            _workCompletedResetEvent.Dispose();
         }
 
-        public void StartRoutine(Action<CChunk, Stream> workAction, Func<Stream, CChunk> chunkSource,
-            Stream destinationStream, Stream sourceStream)
+        public void StartRoutine(Action<CChunk> workAction, Func<CChunk> chunkSource)
         {
             _workAction = workAction;
             _chunkSource = chunkSource;
-            _destinationStream = destinationStream;
-            _sourceStream = sourceStream;
             _thread.Start();
         }
 
@@ -45,11 +41,11 @@ namespace Gzipper
             {
                 while (true)
                 {
-                    CChunk chunk = _chunkSource(_sourceStream);
+                    CChunk chunk = _chunkSource();
                     if (chunk == null)
                         break;
 
-                    _workAction(chunk, _destinationStream);
+                    _workAction(chunk);
                 }
             }
             catch (Exception exception)
@@ -59,8 +55,6 @@ namespace Gzipper
             }
             finally
             {
-                _sourceStream.Dispose();
-                _destinationStream.Dispose();
                 _workCompletedResetEvent.Set();
             }
         }
