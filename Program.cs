@@ -40,8 +40,8 @@ namespace Gzipper
         {
             using (var manager = new CManager(options.SourceFileName, options.DestinationFileName))
             {
-                var workStrategy = new CCompressor(new CGzipperStrategy());
-                manager.Start(workStrategy);
+                var compressor = new CCompressor(new CGzipperStrategy());
+                manager.Start(compressor);
             }
 
             return (Int32)EReturnCode.Ok;
@@ -51,8 +51,8 @@ namespace Gzipper
         {
             using (var manager = new CManager(options.SourceFileName, options.DestinationFileName))
             {
-                var workStrategy = new CDecompressor(new CGzipperStrategy());
-                manager.Start(workStrategy);
+                var decompressor = new CDecompressor(new CGzipperStrategy());
+                manager.Start(decompressor);
             }
 
             return (Int32) EReturnCode.Ok;

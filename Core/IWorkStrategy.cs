@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Concurrent;
+using System.IO;
 
 namespace Gzipper
 {
@@ -6,6 +7,8 @@ namespace Gzipper
     {
         CChunk GetChunk(Stream sourceStream);
 
-        void Act(CChunk chunk, Stream destinationStream);
+        void Act(CChunk chunk, BlockingCollection<CChunk> destination);
+
+        void WriteChunk(CChunk chunk, Stream destinationStream);
     }
 }

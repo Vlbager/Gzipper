@@ -3,36 +3,34 @@ using System.Threading;
 
 namespace Gzipper
 {
-    internal class CWorker
+    internal class CWorker : IDisposable
     {
         private readonly Thread _thread;
-        private readonly ManualResetEventSlim _workCompletedResetEvent;
+        private readonly ManualResetEvent _workCompletedResetEvent;
 
         private Func<CChunk> _chunkSource;
         private Action<CChunk> _workAction;
+        
+        public Exception WorkerException { get; private set; }
 
-        private Exception _workerException;
+        public WaitHandle WaitHandle => _workCompletedResetEvent;
 
         public CWorker()
         {
-            _thread = new Thread(Routine);
-            _workCompletedResetEvent = new ManualResetEventSlim(initialState: false);
+            _thread = new Thread(Routine) {IsBackground = true};
+            _workCompletedResetEvent = new ManualResetEvent(initialState: false);
         }
 
-        public void WaitWhenCompleted()
+        public void StartRoutine(Func<CChunk> chunkSource, Action<CChunk> workAction)
         {
-            _workCompletedResetEvent.Wait();
-            if (_workerException != null)
-                throw _workerException;
-
-            _workCompletedResetEvent.Dispose();
-        }
-
-        public void StartRoutine(Action<CChunk> workAction, Func<CChunk> chunkSource)
-        {
-            _workAction = workAction;
             _chunkSource = chunkSource;
+            _workAction = workAction;
             _thread.Start();
+        }
+
+        public void Dispose()
+        {
+            _workCompletedResetEvent.Dispose();
         }
 
         private void Routine()
@@ -42,7 +40,7 @@ namespace Gzipper
                 while (true)
                 {
                     CChunk chunk = _chunkSource();
-                    if (chunk == null)
+                    if (chunk.IsLast)
                         break;
 
                     _workAction(chunk);
@@ -51,7 +49,7 @@ namespace Gzipper
             catch (Exception exception)
             {
                 Console.WriteLine($"Unexpected error occured in thread {_thread.ManagedThreadId}");
-                _workerException = exception;
+                WorkerException = exception;
             }
             finally
             {
