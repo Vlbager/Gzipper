@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
 
@@ -19,8 +18,9 @@ namespace Gzipper
         /// <summary>
         /// Returns a compressed chunk from <see cref="sourceStream"/> or null, when end of stream
         /// </summary>
-        public CChunk GetChunk(Stream sourceStream)
+        public Boolean TryGetChunk(Stream sourceStream, out CChunk chunk)
         {
+            chunk = default;
             Int32 chunkSize;
 
             Boolean chunkIsCaptured;
@@ -29,7 +29,7 @@ namespace Gzipper
                 Int64 startPosition = _readOffset;
                 sourceStream.Position = startPosition;
                 if (!sourceStream.TryReadInt32(out chunkSize))
-                    return CChunk.CreateEmptyChunk();
+                    return false;
 
                 Int64 nextOffset = startPosition + chunkSize + CChunk.HeaderSize;
 
@@ -38,10 +38,12 @@ namespace Gzipper
 
             } while (!chunkIsCaptured);
 
-            return sourceStream.ReadChunk(chunkSize);
+            chunk = sourceStream.ReadChunk(chunkSize);
+
+            return true;
         }
 
-        public void Act(CChunk chunk, BlockingCollection<CChunk> destination)
+        public void Act(CChunk chunk, CChunkBuffer destination)
         {
             Byte[] rawData = _compressionStrategy.Decompress(chunk.Data);
 

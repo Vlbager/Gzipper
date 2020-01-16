@@ -8,8 +8,11 @@ namespace Gzipper
         private readonly Thread _thread;
         private readonly ManualResetEvent _workCompletedResetEvent;
 
-        private Func<CChunk> _chunkSource;
+        public delegate Boolean TryGetFunc<T>(out T item);
+
+        private TryGetFunc<CChunk> _tryGetChunkFunc;
         private Action<CChunk> _workAction;
+        private Action _onCompleteAction;
         
         public Exception WorkerException { get; private set; }
 
@@ -21,10 +24,11 @@ namespace Gzipper
             _workCompletedResetEvent = new ManualResetEvent(initialState: false);
         }
 
-        public void StartRoutine(Func<CChunk> chunkSource, Action<CChunk> workAction)
+        public void StartRoutine(TryGetFunc<CChunk> tryGetChunkFunc, Action<CChunk> workAction, Action onCompleteAction)
         {
-            _chunkSource = chunkSource;
+            _tryGetChunkFunc = tryGetChunkFunc;
             _workAction = workAction;
+            _onCompleteAction = onCompleteAction;
             _thread.Start();
         }
 
@@ -39,12 +43,13 @@ namespace Gzipper
             {
                 while (true)
                 {
-                    CChunk chunk = _chunkSource();
-                    if (chunk.IsLast)
+                    if (!_tryGetChunkFunc(out CChunk chunk))
                         break;
 
                     _workAction(chunk);
                 }
+
+                _onCompleteAction();
             }
             catch (Exception exception)
             {

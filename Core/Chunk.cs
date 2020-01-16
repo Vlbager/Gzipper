@@ -11,23 +11,11 @@ namespace Gzipper
         public Int64 Offset { get; }
         public Int32 Size { get; }
 
-        public Boolean IsLast { get; }
-
         public CChunk(Byte[] data, Int64 offset)
         {
             Data = data;
             Offset = offset;
             Size = Data.Length + HeaderSize;
-        }
-
-        private CChunk()
-        {
-            IsLast = true;
-        }
-
-        public static CChunk CreateEmptyChunk()
-        {
-            return new CChunk();
         }
     }
 }

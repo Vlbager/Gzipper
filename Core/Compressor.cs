@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
 
@@ -23,8 +22,10 @@ namespace Gzipper
         /// <summary>
         /// Returns a raw data chunk from <see cref="sourceStream"/> or empty chunk, when end of stream.
         /// </summary>
-        public CChunk GetChunk(Stream sourceStream)
+        public Boolean TryGetChunk(Stream sourceStream, out CChunk chunk)
         {
+            chunk = default;
+
             var data = new Byte[SourceChunkSize];
 
             Int64 originalOffset = Interlocked.Add(ref _readOffset, SourceChunkSize) - SourceChunkSize;
@@ -35,7 +36,7 @@ namespace Gzipper
             if (readCount < SourceChunkSize)
             {
                 if (readCount == 0)
-                    return CChunk.CreateEmptyChunk();
+                    return false;
 
                 var lastChunkData = new Byte[readCount];
                 Array.Copy(data, lastChunkData, readCount);
@@ -43,10 +44,12 @@ namespace Gzipper
                 data = lastChunkData;
             }
 
-            return new CChunk(data, originalOffset);
+            chunk = new CChunk(data, originalOffset);
+
+            return true;
         }
 
-        public void Act(CChunk chunk, BlockingCollection<CChunk> destination)
+        public void Act(CChunk chunk, CChunkBuffer destination)
         {
             Byte[] compressedData = _compressionStrategy.Compress(chunk.Data);
 
