@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 
-namespace Gzipper
+namespace Gzipper.Archiver
 {
     internal static class SStreamExtensions
     {

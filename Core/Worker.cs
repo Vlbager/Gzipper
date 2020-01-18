@@ -1,17 +1,17 @@
 ﻿using System;
 using System.Threading;
 
-namespace Gzipper
+namespace Gzipper.Core
 {
-    internal class CWorker : IDisposable
+    internal class CWorker<T> : IDisposable
     {
         private readonly Thread _thread;
         private readonly ManualResetEvent _workCompletedResetEvent;
 
-        public delegate Boolean TryGetFunc<T>(out T item);
+        public delegate Boolean TryGetFunc<TOut>(out TOut item);
 
-        private TryGetFunc<CChunk> _tryGetChunkFunc;
-        private Action<CChunk> _workAction;
+        private TryGetFunc<T> _itemsSource;
+        private Action<T> _workAction;
         private Action _onCompleteAction;
         
         public Exception WorkerException { get; private set; }
@@ -20,13 +20,13 @@ namespace Gzipper
 
         public CWorker()
         {
-            _thread = new Thread(Routine) {IsBackground = true};
+            _thread = new Thread(Routine);
             _workCompletedResetEvent = new ManualResetEvent(initialState: false);
         }
 
-        public void StartRoutine(TryGetFunc<CChunk> tryGetChunkFunc, Action<CChunk> workAction, Action onCompleteAction)
+        public void StartRoutine(TryGetFunc<T> itemsSource, Action<T> workAction, Action onCompleteAction)
         {
-            _tryGetChunkFunc = tryGetChunkFunc;
+            _itemsSource = itemsSource;
             _workAction = workAction;
             _onCompleteAction = onCompleteAction;
             _thread.Start();
@@ -43,17 +43,17 @@ namespace Gzipper
             {
                 while (true)
                 {
-                    if (!_tryGetChunkFunc(out CChunk chunk))
+                    if (!_itemsSource(out T item))
                         break;
 
-                    _workAction(chunk);
+                    _workAction(item);
                 }
 
                 _onCompleteAction();
             }
             catch (Exception exception)
             {
-                Console.WriteLine($"Unexpected error occured in thread {_thread.ManagedThreadId}");
+                Console.WriteLine($"Exception occured in thread {_thread.ManagedThreadId}");
                 WorkerException = exception;
             }
             finally

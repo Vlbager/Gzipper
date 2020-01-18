@@ -1,11 +1,13 @@
 ﻿using System;
 using System.IO;
 using CommandLine;
+using Gzipper.Archiver;
 using Gzipper.CommandLineOptions;
+using Gzipper.Core;
 
 namespace Gzipper
 {
-    public class Program
+    public static class Program
     { 
         public static Int32 Main(String[] args)
         {
@@ -38,10 +40,10 @@ namespace Gzipper
 
         private static Int32 Compress(CCompressOptions options)
         {
-            using (var manager = new CManager(options.SourceFileName, options.DestinationFileName))
+            var compressor = new CCompressor(new CGzipperStrategy());
+            using (var manager = new CManager<CChunk>(compressor, options.SourceFileName, options.DestinationFileName))
             {
-                var compressor = new CCompressor(new CGzipperStrategy());
-                manager.Start(compressor);
+                manager.Start();
             }
 
             return (Int32)EReturnCode.Ok;
@@ -49,10 +51,10 @@ namespace Gzipper
 
         private static Int32 Decompress(CDecompressOptions options)
         {
-            using (var manager = new CManager(options.SourceFileName, options.DestinationFileName))
+            var decompressor = new CDecompressor(new CGzipperStrategy());
+            using (var manager = new CManager<CChunk>(decompressor, options.SourceFileName, options.DestinationFileName))
             {
-                var decompressor = new CDecompressor(new CGzipperStrategy());
-                manager.Start(decompressor);
+                manager.Start();
             }
 
             return (Int32) EReturnCode.Ok;

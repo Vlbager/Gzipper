@@ -1,10 +1,11 @@
 ﻿using System;
 using System.IO;
 using System.Threading;
+using Gzipper.Core;
 
-namespace Gzipper
+namespace Gzipper.Archiver
 {
-    internal class CCompressor : IWorkStrategy
+    internal class CCompressor : IWorkStrategy<CChunk>
     {
         // 1 MiB
         private const Int32 SourceChunkSize = 1_048_576;
@@ -19,10 +20,7 @@ namespace Gzipper
             _compressionStrategy = compressionStrategy;
         }
 
-        /// <summary>
-        /// Returns a raw data chunk from <see cref="sourceStream"/> or empty chunk, when end of stream.
-        /// </summary>
-        public Boolean TryGetChunk(Stream sourceStream, out CChunk chunk)
+        public Boolean TryGetItem(Stream sourceStream, out CChunk chunk)
         {
             chunk = default;
 
@@ -49,7 +47,7 @@ namespace Gzipper
             return true;
         }
 
-        public void Act(CChunk chunk, CChunkBuffer destination)
+        public void Act(CChunk chunk, CItemsBuffer<CChunk> destination)
         {
             Byte[] compressedData = _compressionStrategy.Compress(chunk.Data);
 
@@ -58,7 +56,7 @@ namespace Gzipper
             destination.Add(compressedChunk);
         }
 
-        public void WriteChunk(CChunk chunk, Stream destinationStream)
+        public void WriteItem(CChunk chunk, Stream destinationStream)
         {
             Int64 writeOffset = Interlocked.Add(ref _writeOffset, chunk.Size) - chunk.Size;
 

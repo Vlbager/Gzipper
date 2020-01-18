@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Gzipper
+namespace Gzipper.Archiver
 {
     internal class CChunk
     {

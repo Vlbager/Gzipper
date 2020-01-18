@@ -1,77 +1,82 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 
-namespace Gzipper
+namespace Gzipper.Core
 {
-    internal class CManager : IDisposable
+    internal class CManager<T> : IDisposable
     {
         private readonly String _sourcePath;
         private readonly String _destinationPath;
-        private readonly CWorker[] _workers;
-        private readonly CWorker[] _readers;
-        private readonly CWorker[] _writers;
+        private readonly IWorkStrategy<T> _strategy;
+
+        private readonly CWorker<T>[] _readers;
+        private readonly CWorker<T>[] _workers;
+        private readonly CWorker<T>[] _writers;
+        private readonly List<CWorker<T>> _uncompletedWorkers;
         private readonly List<IDisposable> _disposableResources;
 
-        private readonly CChunkBuffer _sourceChunks;
-        private readonly CChunkBuffer _completedChunks;
+        private readonly CItemsBuffer<T> _sourceItems;
+        private readonly CItemsBuffer<T> _completedItems;
 
-        public CManager(String sourcePath, String destinationPath)
+        public CManager(IWorkStrategy<T> strategy, String sourcePath, String destinationPath)
         {
             _sourcePath = sourcePath;
             _destinationPath = destinationPath;
+            _strategy = strategy;
 
             _disposableResources = new List<IDisposable>();
+            _uncompletedWorkers = new List<CWorker<T>>();
 
             Int32 workersCount = Environment.ProcessorCount;
-            _workers = CreateWorkers(workersCount);
             _readers = CreateWorkers(workersCount);
+            _workers = CreateWorkers(workersCount);
             _writers = CreateWorkers(workersCount);
 
-            Int32 capacity = 3 * workersCount;
-            _sourceChunks = new CChunkBuffer(capacity, workersCount);
-            _disposableResources.Add(_sourceChunks);
+            // Let there be 5 items in the buffer for each worker.
+            Int32 capacity = 5 * workersCount;
+            _sourceItems = new CItemsBuffer<T>(capacity, workersCount);
+            _disposableResources.Add(_sourceItems);
 
-            _completedChunks = new CChunkBuffer(capacity, workersCount);
-            _disposableResources.Add(_completedChunks);
+            _completedItems = new CItemsBuffer<T>(capacity, workersCount);
+            _disposableResources.Add(_completedItems);
         }
 
-        public void Start(IWorkStrategy strategy)
+        public void Start()
         {
             if (File.Exists(_destinationPath))
                 File.Delete(_destinationPath);
 
-            foreach (CWorker reader in _readers)
+            foreach (CWorker<T> reader in _readers)
             {
                 var sourceStream = new FileStream(_sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                 _disposableResources.Add(sourceStream);
 
                 reader.StartRoutine(
-                    (out CChunk chunk) => strategy.TryGetChunk(sourceStream, out chunk),
-                    chunk => _sourceChunks.Add(chunk),
-                    () => _sourceChunks.ProducerIsDoneCallBack());
+                    (out T item) => _strategy.TryGetItem(sourceStream, out item),
+                    item => _sourceItems.Add(item),
+                    () => _sourceItems.ProducerIsDoneCallBack());
             }
 
-            foreach (CWorker worker in _workers)
+            foreach (CWorker<T> worker in _workers)
             {
                 worker.StartRoutine(
-                    _sourceChunks.TryTake,
-                    chunk => strategy.Act(chunk, _completedChunks),
-                    () => _completedChunks.ProducerIsDoneCallBack());
+                    _sourceItems.TryTake,
+                    item => _strategy.Act(item, _completedItems),
+                    () => _completedItems.ProducerIsDoneCallBack());
             }
 
-            foreach (CWorker writer in _writers)
+            foreach (CWorker<T> writer in _writers)
             {
                 var destinationStream = new FileStream(_destinationPath, FileMode.OpenOrCreate, FileAccess.Write,
                     FileShare.Write);
                 _disposableResources.Add(destinationStream);
 
                 writer.StartRoutine(
-                    _completedChunks.TryTake,
-                    chunk => strategy.WriteChunk(chunk, destinationStream),
+                    _completedItems.TryTake,
+                    item => _strategy.WriteItem(item, destinationStream),
                     () => { });
             }
 
@@ -86,35 +91,31 @@ namespace Gzipper
 
         private void WaitWhenCompleted()
         {
-            List<CWorker> uncompletedWorkers = _readers
-                .Concat(_workers)
-                .Concat(_writers)
-                .ToList();
-
-            while (uncompletedWorkers.Count > 0)
+            while (_uncompletedWorkers.Count > 0)
             {
-                WaitHandle[] waitHandles = uncompletedWorkers
+                WaitHandle[] waitHandles = _uncompletedWorkers
                     .Select(worker => worker.WaitHandle)
                     .ToArray();
 
                 Int32 completedIndex = WaitHandle.WaitAny(waitHandles);
 
-                CWorker completedWorker = uncompletedWorkers[completedIndex];
+                CWorker<T> completedWorker = _uncompletedWorkers[completedIndex];
                 if (completedWorker.WorkerException != null)
                     throw completedWorker.WorkerException;
 
-                uncompletedWorkers.Remove(completedWorker);
+                _uncompletedWorkers.Remove(completedWorker);
             }
         }
 
-        private CWorker[] CreateWorkers(Int32 count)
+        private CWorker<T>[] CreateWorkers(Int32 count)
         {
-            var workers = new CWorker[count];
+            var workers = new CWorker<T>[count];
             for (var i = 0; i < count; i++)
             {
-                var worker = new CWorker();
+                var worker = new CWorker<T>();
                 workers[i] = worker;
                 _disposableResources.Add(worker);
+                _uncompletedWorkers.Add(worker);
             }
 
             return workers;

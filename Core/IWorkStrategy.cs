@@ -1,15 +1,14 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.IO;
 
-namespace Gzipper
+namespace Gzipper.Core
 {
-    internal interface IWorkStrategy
+    internal interface IWorkStrategy<T>
     {
-        Boolean TryGetChunk(Stream sourceStream, out CChunk chunk);
+        Boolean TryGetItem(Stream sourceStream, out T item);
 
-        void Act(CChunk chunk, CChunkBuffer destination);
+        void Act(T item, CItemsBuffer<T> destination);
 
-        void WriteChunk(CChunk chunk, Stream destinationStream);
+        void WriteItem(T item, Stream destinationStream);
     }
 }
